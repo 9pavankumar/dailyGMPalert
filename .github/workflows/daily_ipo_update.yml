@@ -2,8 +2,8 @@ name: Daily IPO Updates
 
 on:
   schedule:
-    - cron: '20 7 * * *'  # 1:20 PM IST (07:20 UTC)
-    - cron: '20 4 * * *'  # 9:50 AM IST (04:20 UTC)
+    - cron: '50 7 * * *'  # 13:20 IST => 07:50 UTC (1:20 PM IST)
+    - cron: '20 4 * * *'  # 09:50 IST => 04:20 UTC (9:50 AM IST)
   workflow_dispatch:
 
 jobs:
@@ -19,14 +19,18 @@ jobs:
         uses: actions/checkout@v4
 
       - name: 🐍 Set up Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v4
         with:
           python-version: '3.10'
 
       - name: 📦 Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install -r requirements.txt lxml html5lib beautifulsoup4
+          if [ -f requirements.txt ]; then
+            pip install -r requirements.txt
+          else
+            pip install beautifulsoup4 lxml html5lib
+          fi
 
       - name: 🚀 Run IPO update script
         run: python ipo_gmp_telegram.py
