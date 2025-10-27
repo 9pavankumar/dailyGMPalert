@@ -1,3 +1,14 @@
+try:
+    from bs4 import BeautifulSoup
+except ImportError:
+    raise SystemExit(
+        "Missing dependency 'beautifulsoup4'. Install with:\n"
+        "  pip install beautifulsoup4\n"
+        "or add 'beautifulsoup4' to requirements.txt and re-run the workflow."
+    )
+
+# ...rest of your script...
+
 import pandas as pd
 import requests
 import datetime
