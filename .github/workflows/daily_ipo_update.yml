@@ -1,0 +1,33 @@
+name: Daily IPO Updates
+on:
+  schedule:
+    # Run daily at 9:50 AM IST  → 04:20 UTC
+    - cron: "20 4 * * *"
+    # Run daily at 1:20 PM IST → 07:50 UTC
+    - cron: "50 7 * * *"
+
+  workflow_dispatch:        # Allow manual run
+
+jobs:
+  run-script:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: |
+          pip install -r requirements.txt
+          playwright install chromium
+
+      - name: Run IPO GMP Script
+        env:
+          BOT_TOKEN: ${{ secrets.BOT_TOKEN }}
+          CHAT_ID: ${{ secrets.CHAT_ID }}
+        run: python ipo_gmp_telegram.py
