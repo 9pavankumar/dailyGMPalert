@@ -1,6 +1,6 @@
-beautifulsoup4
-lxml
-html5lib
+pandas
 requests
 playwright
-pandas
+lxml
+html5lib
+beautifulsoup4
