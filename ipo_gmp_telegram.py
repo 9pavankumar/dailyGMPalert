@@ -10,7 +10,8 @@ CHAT_ID = "YOUR_CHAT_ID"
 today = datetime.date.today().strftime("%d-%m-%y")
 
 def fetch_ipo_data():
-    url = "https://ipowatch.in/gmp/"
+    url = "https://www.investorgain.com/report/live-ipo-gmp/331/
+"
     response = requests.get(url)
     response.raise_for_status()
     html = response.text
