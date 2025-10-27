@@ -4,13 +4,6 @@ ipo_gmp_telegram.py
 
 Fetches IPO GMP data from investorgain, parses the table(s), filters upcoming/current IPOs,
 formats a summary and posts it to a Telegram chat via BOT_TOKEN and CHAT_ID environment vars.
-
-Requirements:
-- requests
-- pandas
-- beautifulsoup4
-- lxml (recommended)
-- html5lib (fallback)
 """
 
 try:
@@ -86,16 +79,20 @@ def find_and_parse_tables(html_text):
 
 def ci_col(df, candidates):
     """
-    Case-insensitive column find. Returns first matching column name in df for candidates list.
+    Case-insensitive column find that tolerates non-string column labels.
+    Returns the original column label (not its string).
     """
-    cols_lower = {c.lower(): c for c in df.columns}
+    # Map lowercase string version -> original label
+    cols_lower = {str(c).lower(): c for c in df.columns}
     for cand in candidates:
-        if cand.lower() in cols_lower:
-            return cols_lower[cand.lower()]
-    # fallback: try to match by substring
+        key = str(cand).lower()
+        if key in cols_lower:
+            return cols_lower[key]
+    # fallback: substring match against stringified column names
     for col in df.columns:
+        col_s = str(col).lower()
         for cand in candidates:
-            if cand.lower() in str(col).lower():
+            if str(cand).lower() in col_s:
                 return col
     return None
 
@@ -108,7 +105,6 @@ def parse_date_flexible(s, today=None):
     if today is None:
         today = datetime.date.today()
 
-    # Try multiple formats. If no year, assume current year.
     patterns = ["%d-%b-%Y", "%d-%b-%y", "%d-%b", "%d %b %Y", "%d %b %y", "%d %b"]
     for p in patterns:
         try:
@@ -119,16 +115,13 @@ def parse_date_flexible(s, today=None):
         except Exception:
             continue
 
-    # Try parsing with month names spelled out
     try:
-        # e.g., "31 Oct"
         parts = s.replace(",", " ").strip()
         dt = datetime.datetime.strptime(parts, "%d %B")
         return dt.replace(year=today.year).date()
     except Exception:
         pass
 
-    # Last-resort: extract numbers for day and month by name
     m = re.search(r"(\d{1,2})\s*[-/ ]\s*([A-Za-z]{3,})", s)
     if m:
         day = int(m.group(1))
@@ -142,71 +135,51 @@ def parse_date_flexible(s, today=None):
     return None
 
 def parse_size_to_cr(s):
-    """
-    Convert various IPO Size strings to numeric value in Crore (Cr).
-    Examples:
-      "250 Cr" -> 250.0
-      "6,50,00,000" -> try to parse but fallback to NaN
-      "650 Lakh" -> 6.5 (since 100 Lakh = 1 Cr)
-    """
     if pd.isnull(s):
         return None
     s = str(s).strip()
     if not s or s in ["-", "—", "–"]:
         return None
     s = s.replace("₹", "").replace("Rs.", "").replace("Rs", "").strip()
-    # normalize commas and weird separators
     s = s.replace(",", "").replace(" ", "")
-    # common patterns: end with Cr, L, Lakh, lakh
     m_cr = re.match(r"^([0-9.]+)(?:cr|Cr|CR)$", s)
     if m_cr:
         return float(m_cr.group(1))
     m_l = re.match(r"^([0-9.]+)(?:l|L|lakh|Lakh)$", s)
     if m_l:
-        # convert Lakh to Cr (1 Cr = 100 Lakh)
         return float(m_l.group(1)) / 100.0
-    # if plain number, assume it's already in Crore if value small; otherwise try heuristic:
     try:
         val = float(s)
-        # If value seems huge (e.g., >10000) maybe it's in rupees, convert to crores:
-        if val > 1000:  # heuristic threshold
-            # value might be in rupees; convert rupees to crores: /1e7
+        if val > 1000:
             return val / 1e7
         return val
     except Exception:
         return None
 
 def parse_gmp_field(s):
-    """
-    Return formatted display and try to extract numeric rupee + percent if needed.
-    """
     if pd.isnull(s):
         return "₹-- (0.00%)"
     raw = str(s).strip()
     if not raw or raw in ["-", "—", "–"]:
         return "₹-- (0.00%)"
-    # Try to extract rupee and percent: e.g. "₹ 50 (2.00%)" or "₹50 / 2%"
     rupee = None
     percent = None
     m = re.search(r"₹\s*([0-9.,]+)", raw)
     if m:
         rupee = m.group(1).replace(",", "")
-    m2 = re.search(r"([0-9.,]+)\s*%|\(([-+]?[0-9.,]+)%\)", raw)
-    if m2:
-        # pick first non-empty group
-        for g in m2.groups():
+    # look for percent in several ways
+    m_pct = re.search(r"([+-]?[0-9.,]+)\s*%|\(([+-]?[0-9.,]+)%\)", raw)
+    if m_pct:
+        for g in m_pct.groups():
             if g:
                 percent = g.replace(",", "")
                 break
-    # Build display
     rupee_disp = f"₹{rupee}" if rupee else "₹--"
     percent_disp = f"({percent}%)" if percent else "(0.00%)"
     return f"{rupee_disp} {percent_disp}"
 
 def normalize_df(df):
-    # Lower/strip columns for easier matching; but keep originals
     df = df.copy()
-    # find columns with various names
     col_name = ci_col(df, ["Name", "Company", "Issue Name"])
     col_open = ci_col(df, ["Open", "Opening", "Open Date"])
     col_close = ci_col(df, ["Close", "Closing", "Close Date"])
@@ -215,9 +188,10 @@ def normalize_df(df):
     col_sub = ci_col(df, ["Sub", "Subscription", "Subs"])
     col_listing = ci_col(df, ["Listing", "List", "Status"])
 
-    # Create standardized columns
-    def safe_col(df, name):
-        return df[name] if name and name in df.columns else pd.Series([""] * len(df))
+    def safe_col(df_local, name):
+        if name is not None and name in df_local.columns:
+            return df_local[name]
+        return pd.Series([""] * len(df_local))
 
     df_std = pd.DataFrame()
     df_std["Name"] = safe_col(df, col_name)
@@ -228,30 +202,22 @@ def normalize_df(df):
     df_std["Sub"] = safe_col(df, col_sub)
     df_std["Listing"] = safe_col(df, col_listing)
 
-    # Clean Name: remove trailing 'U' or other markers
     df_std["Name"] = df_std["Name"].astype(str).str.replace(r"\s*U$", "", regex=True).str.strip()
 
-    # parse dates
     today = datetime.date.today()
     df_std["Close_date_parsed"] = df_std["Close"].apply(lambda x: parse_date_flexible(x, today=today))
     df_std["Open_date_parsed"] = df_std["Open"].apply(lambda x: parse_date_flexible(x, today=today))
 
-    # Filter SME and closed ones
     df_std = df_std[~df_std["Name"].astype(str).str.contains("SME", case=False, na=False)]
     df_std = df_std[~df_std["Listing"].astype(str).str.contains("❌", na=False)]
 
-    # Parse IPO Size numeric in Crores
     df_std["IPO_Size_num"] = df_std["IPO Size"].apply(parse_size_to_cr)
-
-    # Parse GMP display
     df_std["GMP_display"] = df_std["GMP"].apply(parse_gmp_field)
 
-    # Replace NaNs and fill blanks
     df_std = df_std.fillna("")
 
-    # Sort by IPO size desc, NaN -> 0
     try:
-        df_std["IPO_Size_sort"] = df_std["IPO_Size_num"].apply(lambda x: float(x) if pd.notnull(x) else 0.0)
+        df_std["IPO_Size_sort"] = df_std["IPO_Size_num"].apply(lambda x: float(x) if pd.notnull(x) and x != "" else 0.0)
     except Exception:
         df_std["IPO_Size_sort"] = 0.0
     df_std = df_std.sort_values(by="IPO_Size_sort", ascending=False).reset_index(drop=True)
@@ -260,11 +226,6 @@ def normalize_df(df):
     return df_std
 
 def filter_relevant(df):
-    """
-    Keep IPOs that are:
-      - Close date between yesterday and next 5 days
-      - OR Open date in future (upcoming)
-    """
     today = datetime.date.today()
     future_limit = today + datetime.timedelta(days=5)
     cond_close = df["Close_date_parsed"].apply(lambda d: isinstance(d, datetime.date) and (today - datetime.timedelta(days=1) <= d <= future_limit))
@@ -273,7 +234,6 @@ def filter_relevant(df):
     return filtered
 
 def format_message_html(df):
-    # HTML formatted message
     today_str = datetime.date.today().strftime("%d-%b-%Y")
     if df.empty:
         return f"<b>📢 IPO Updates - {html.escape(today_str)}</b>\n\nNo upcoming/current IPOs found."
@@ -303,7 +263,7 @@ def format_message_html(df):
         lines.append(f"• 💰 Issue Size: {size_disp}")
         lines.append(f"• 📈 GMP: {gmp} | 📊 Sub: {sub or '--'}")
         lines.append(f"• 🗓 {opend} – {closed} | Listing: {listing or '--'}")
-        lines.append("")  # blank line between entries
+        lines.append("")
 
     return "\n".join(lines).strip()
 
@@ -333,20 +293,23 @@ def main():
     if not dfs:
         print("No tables found in the fetched page.")
         save_debug_html(html_text, path="./ipo_page_debug.html")
-        # Exit 0 to avoid failing scheduled workflow when there's simply no data.
         sys.exit(0)
 
-    # Choose the first reasonable dataframe (prefer wider one)
-    # Remove completely empty dfs
     dfs_clean = [d.dropna(how="all", axis=1).dropna(how="all", axis=0) for d in dfs if not d.dropna(how="all", axis=1).empty]
     if not dfs_clean:
         print("Parsed tables exist but all are empty after cleanup.")
         save_debug_html(html_text, path="./ipo_page_debug.html")
         sys.exit(0)
 
-    # pick largest table by columns*rows
     best = max(dfs_clean, key=lambda x: (x.shape[0] * x.shape[1]))
     print(f"Using table with shape: {best.shape}")
+
+    # If the best table is just a single cell, treat as no useful data and save debug HTML
+    if best.shape == (1, 1):
+        single_val = best.iat[0, 0]
+        print(f"Best table is a single cell: {single_val!r} — treating as no useful data.")
+        save_debug_html(html_text, path="./ipo_page_debug.html")
+        sys.exit(0)
 
     try:
         df_std = normalize_df(best)
@@ -358,7 +321,6 @@ def main():
     df_filtered = filter_relevant(df_std)
     if df_filtered.empty:
         print("No relevant IPOs after filtering (close/open dates).")
-        # Still send summary or just exit: here we send a small summary
         msg = format_message_html(df_filtered)
         send_telegram_message(msg)
         sys.exit(0)
