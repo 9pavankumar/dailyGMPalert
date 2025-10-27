@@ -29,4 +29,4 @@ jobs:
           python -m playwright install chromium
 
       - name: Run IPO script
-        run: python your_script_name.py
+        run: python ipo_gmp_telegram.py
