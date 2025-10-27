@@ -2,31 +2,31 @@ name: Daily IPO Updates
 
 on:
   schedule:
-    - cron: '20 7 * * *'  # 1:20 PM IST (07:20 UTC)
-    - cron: '20 4 * * *'  # 9:50 AM IST (04:20 UTC)
-  workflow_dispatch:
+    - cron: '20 7 * * *'  # Runs at 1:20 PM IST (07:20 UTC)
+    - cron: '20 4 * * *'  # Runs at 9:50 AM IST (04:20 UTC)
+  workflow_dispatch:  # Allows manual trigger from GitHub Actions UI
 
 jobs:
   run-daily-script:
     runs-on: ubuntu-latest
 
+    env:  # ✅ Load Telegram secrets from GitHub repository secrets
+      BOT_TOKEN: ${{ secrets.BOT_TOKEN }}
+      CHAT_ID: ${{ secrets.CHAT_ID }}
+
     steps:
-      - name: Checkout repository
+      - name: 🧩 Checkout repository
         uses: actions/checkout@v4
 
-      - name: Set up Python
+      - name: 🐍 Set up Python
         uses: actions/setup-python@v5
         with:
           python-version: '3.10'
 
-      - name: Install dependencies
+      - name: 📦 Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install -r requirements.txt
+          pip install -r requirements.txt lxml
 
-      - name: Install Playwright Browsers
-        run: |
-          python -m playwright install chromium
-
-      - name: Run IPO script
+      - name: 🚀 Run IPO update script
         run: python ipo_gmp_telegram.py
