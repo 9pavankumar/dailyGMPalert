@@ -115,7 +115,7 @@ def format_message(ipo_df):
         message += "No IPOs available today.\n"
         return message
 
-    message += "🔜 Upcoming IPOs - Order of apply \n"
+    message += "🔜 Upcoming IPOs - Order of apply \n\n"
     for idx, row in ipo_df.iterrows():
         message += f"{row['Rank']}. {row['Name']} (Opens: {row['Open']}, Closes: {row['Close']})\n"
 
