@@ -107,7 +107,8 @@ def fetch_ipo_data():
 
 # ---------- FORMAT MESSAGE ----------
 def format_message(ipo_df):
-    today_str = datetime.date.today().strftime("%d-%m-%y")
+    today_str = datetime.datetime.now().strftime("%d-%m-%y %H:%M:%S")
+
     message = f"📢 IPO Updates - {today_str}\n\n"
 
     if ipo_df.empty:
