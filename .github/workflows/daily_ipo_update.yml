@@ -26,7 +26,7 @@ jobs:
       - name: 📦 Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install -r requirements.txt lxml html5lib
+          pip install -r requirements.txt lxml html5lib beautifulsoup4
 
       - name: 🚀 Run IPO update script
         run: python ipo_gmp_telegram.py
