@@ -1,25 +1,21 @@
 # ipo_gmp_telegram.py
 
+
 import pandas as pd
 from playwright.sync_api import sync_playwright
 import datetime
 import requests
+import os
 
-# ---------- TELEGRAM CONFIG ----------
-# BOT_TOKEN = pass the token your here
-# CHAT_ID = pass the chat_id your here
+# Telegram config from environment variables
+BOT_TOKEN = os.getenv("BOT_TOKEN")
+CHAT_ID = os.getenv("CHAT_ID")
 
 def send_telegram_message(message):
-    """Send formatted message to Telegram"""
     url = f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage"
-    params = {
-        "chat_id": CHAT_ID,
-        "text": message,
-        "parse_mode": "HTML"
-    }
+    params = {"chat_id": CHAT_ID, "text": message, "parse_mode": "HTML"}
     resp = requests.get(url, params=params)
     print("Telegram Response:", resp.text)
-
 
 # ---------- FETCH IPO DATA ----------
 def fetch_ipo_data():
