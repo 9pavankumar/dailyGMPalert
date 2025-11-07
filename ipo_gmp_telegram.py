@@ -98,7 +98,7 @@ def fetch_ipo_data():
     ipo_df["GMP_pct"] = gmp_parsed.apply(lambda x: x[1])
 
     # ✅ Apply minimum filters for all IPOs
-    ipo_df = ipo_df[(ipo_df["IPO_Size_num"] > 400) & (ipo_df["GMP_val"] > 8.5)].copy()
+    ipo_df = ipo_df[(ipo_df["IPO_Size_num"] > 400) & (ipo_df["GMP_val"] > 9.5)].copy()
 
     # ✅ Weighted rank (applied before splitting)
     ipo_df["IPO_Size_norm"] = ipo_df["IPO_Size_num"] / ipo_df["IPO_Size_num"].max()
