@@ -43,7 +43,7 @@ def fetch_ipo_data():
         html = page.content()
         browser.close()
 
-    # ✅ Parse the table using only allowed parsers
+    # Parse table using allowed parsers
     tables = pd.read_html(html, flavor=["lxml", "html5lib"])
     if not tables:
         raise ValueError("No tables found on the page")
@@ -52,16 +52,16 @@ def fetch_ipo_data():
     ipo_df.columns = [c.strip().replace("▲▼", "").strip() for c in ipo_df.columns]
     ipo_df = ipo_df.dropna(how="all")
 
-    # ✅ Clean Name
+    # Clean Name
     ipo_df["Name"] = ipo_df["Name"].astype(str).str.replace(r"\s*U$", "", regex=True).str.strip()
 
-    # ✅ Remove SME and closed IPOs
+    # Remove SME and closed IPOs
     ipo_df = ipo_df[~ipo_df["Name"].str.contains("SME", case=False, na=False)]
     ipo_df = ipo_df[~ipo_df["Listing"].astype(str).str.contains("❌", na=False)]
 
     today = datetime.date.today()
 
-    # ✅ Parse open and close dates
+    # Parse open and close dates
     def parse_date(date_str):
         try:
             return datetime.datetime.strptime(date_str, "%d-%b").replace(year=today.year).date()
@@ -72,10 +72,10 @@ def fetch_ipo_data():
     ipo_df["Close_date_parsed"] = ipo_df["Close"].apply(parse_date)
     ipo_df = ipo_df[ipo_df["Close_date_parsed"].notnull()]
 
-    # ✅ Convert IPO Size safely
+    # Convert IPO Size safely
     ipo_df["IPO_Size_num"] = ipo_df["IPO Size"].apply(safe_to_float)
 
-    # ✅ Parse GMP values
+    # Parse GMP values
     def parse_gmp(gmp_str):
         gmp_val, gmp_pct = 0.0, None
         try:
@@ -97,15 +97,18 @@ def fetch_ipo_data():
     ipo_df["GMP_val"] = gmp_parsed.apply(lambda x: x[0])
     ipo_df["GMP_pct"] = gmp_parsed.apply(lambda x: x[1])
 
-    # ✅ Apply minimum filters for all IPOs
-    ipo_df = ipo_df[(ipo_df["IPO_Size_num"] > 400) & (ipo_df["GMP_val"] > 9.5)].copy()
+    # ✅ Convert GMP_pct to numeric (safe)
+    ipo_df["GMP_pct_num"] = ipo_df["GMP_pct"].apply(lambda x: float(str(x).replace("%", "").strip()) if pd.notnull(x) and str(x).replace(".", "", 1).isdigit() else 0.0)
 
-    # ✅ Weighted rank (applied before splitting)
+    # ✅ Apply filters: min size and min GMP percentage (>= 9.5%)
+    ipo_df = ipo_df[(ipo_df["IPO_Size_num"] > 400) & (ipo_df["GMP_pct_num"] >= 9.5)].copy()
+
+    # ✅ Weighted ranking (based on size and GMP value)
     ipo_df["IPO_Size_norm"] = ipo_df["IPO_Size_num"] / ipo_df["IPO_Size_num"].max()
     ipo_df["GMP_norm"] = ipo_df["GMP_val"] / ipo_df["GMP_val"].max()
     ipo_df["Weighted_Score"] = 0.7 * ipo_df["IPO_Size_norm"] + 0.3 * ipo_df["GMP_norm"]
 
-    # ✅ Split IPOs into current & upcoming based on date
+    # ✅ Split IPOs into current & upcoming
     current_df = ipo_df[
         (ipo_df["Open_date_parsed"] <= today) & (ipo_df["Close_date_parsed"] >= today)
     ].copy()
@@ -122,11 +125,11 @@ def fetch_ipo_data():
 
 
 def format_message(current_df, upcoming_df):
-    """Format the Telegram message"""
+    """Format Telegram message"""
     today_str = datetime.datetime.now().strftime("%d-%m-%Y")
     message = f"📢 IPO Updates - {today_str}\n\n"
 
-    # ✅ Current IPOs
+    # Current IPOs
     message += "✅ <b>IPOs to Apply Now</b>\n\n"
     if current_df.empty:
         message += "No IPOs available to apply now.\n\n"
@@ -134,7 +137,7 @@ def format_message(current_df, upcoming_df):
         for _, row in current_df.iterrows():
             message += f"{row['Rank']}. {row['Name']} (Closes: {row['Close']})\n"
 
-    # ✅ Upcoming IPOs
+    # Upcoming IPOs
     message += "\n🚀 <b>Upcoming IPOs</b>\n\n"
     if upcoming_df.empty:
         message += "No upcoming IPOs found.\n"
@@ -142,7 +145,7 @@ def format_message(current_df, upcoming_df):
         for _, row in upcoming_df.iterrows():
             message += f"{row['Rank']}. {row['Name']} (Opens: {row['Open']})\n"
 
-    # ✅ Details for Current IPOs
+    # Details for Current IPOs
     message += "\n📊 <b>Current IPOs Details</b>\n\n"
     for _, row in current_df.iterrows():
         gmp_info = f"₹{row['GMP_val']:.0f}"
@@ -156,7 +159,7 @@ def format_message(current_df, upcoming_df):
             f"🗓 {row['Open']}–{row['Close']}\n\n"
         )
 
-    # ✅ Details for Upcoming IPOs
+    # Details for Upcoming IPOs
     message += "\n📊 <b>Upcoming IPOs Details</b>\n\n"
     for _, row in upcoming_df.iterrows():
         gmp_info = f"₹{row['GMP_val']:.0f}"
